@@ -1,0 +1,285 @@
+// prisma/schema.prisma
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// Core application models
+model User {
+  id                String    @id @default(cuid())
+  email             String    @unique
+  emailVerified     DateTime?
+  image             String?
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+  
+  // Anonymous identity (separate from OAuth identity)
+  username          String    @unique
+  displayName       String?
+  bio               String?
+  profileImage      String?
+  
+  // Location & Demographics
+  country           String?
+  state             String?
+  age               Int?
+  gender            Gender?
+  
+  // Medical Information
+  primaryDisease    Disease?
+  diseaseOnset      DateTime?
+  diseaseSeverity   Severity?
+  
+  // Athletic Information  
+  yearsInSport      Int?
+  competitiveLevel  CompetitiveLevel?
+  
+  // Subscription & Status
+  subscriptionStatus SubscriptionStatus @default(TRIAL)
+  subscriptionId     String?
+  subscriptionEndsAt DateTime?
+  
+  // Reputation System
+  karmaPoints       Int       @default(0)
+  
+  // Relations
+  posts             Post[]
+  comments          Comment[]
+  votes             Vote[]
+  subscriptions     CommunitySubscription[]
+  friendships       Friendship[] @relation("UserFriendships")
+  friendOf          Friendship[] @relation("FriendOfUser")
+  
+  @@map("users")
+}
+
+model Community {
+  id          String   @id @default(cuid())
+  name        String   @unique
+  description String?
+  disease     Disease?
+  discipline  Discipline?
+  isDefault   Boolean  @default(false)
+  createdAt   DateTime @default(now())
+  
+  posts       Post[]
+  subscriptions CommunitySubscription[]
+  
+  @@map("communities")
+}
+
+model CommunitySubscription {
+  id          String    @id @default(cuid())
+  userId      String
+  communityId String
+  joinedAt    DateTime  @default(now())
+  
+  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  community   Community @relation(fields: [communityId], references: [id], onDelete: Cascade)
+  
+  @@unique([userId, communityId])
+  @@map("community_subscriptions")
+}
+
+model Post {
+  id          String     @id @default(cuid())
+  title       String
+  content     String     @db.Text
+  authorId    String
+  communityId String
+  createdAt   DateTime   @default(now())
+  updatedAt   DateTime   @updatedAt
+  
+  // Post categorization
+  postType    PostType   @default(DISCUSSION)
+  tags        String[]
+  
+  // Engagement metrics
+  upvotes     Int        @default(0)
+  downvotes   Int        @default(0)
+  commentCount Int       @default(0)
+  
+  author      User       @relation(fields: [authorId], references: [id], onDelete: Cascade)
+  community   Community  @relation(fields: [communityId], references: [id], onDelete: Cascade)
+  comments    Comment[]
+  votes       Vote[]
+  
+  @@map("posts")
+}
+
+model Comment {
+  id        String    @id @default(cuid())
+  content   String    @db.Text
+  authorId  String
+  postId    String
+  parentId  String?   // For nested comments
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  
+  // Engagement metrics
+  upvotes   Int       @default(0)
+  downvotes Int       @default(0)
+  
+  author    User      @relation(fields: [authorId], references: [id], onDelete: Cascade)
+  post      Post      @relation(fields: [postId], references: [id], onDelete: Cascade)
+  parent    Comment?  @relation("CommentReplies", fields: [parentId], references: [id])
+  replies   Comment[] @relation("CommentReplies")
+  votes     Vote[]
+  
+  @@map("comments")
+}
+
+model Vote {
+  id        String   @id @default(cuid())
+  userId    String
+  postId    String?
+  commentId String?
+  voteType  VoteType
+  createdAt DateTime @default(now())
+  
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  post      Post?    @relation(fields: [postId], references: [id], onDelete: Cascade)
+  comment   Comment? @relation(fields: [commentId], references: [id], onDelete: Cascade)
+  
+  // User can only vote once per post/comment
+  @@unique([userId, postId])
+  @@unique([userId, commentId])
+  @@map("votes")
+}
+
+model Friendship {
+  id         String   @id @default(cuid())
+  userId     String
+  friendId   String
+  status     FriendshipStatus @default(PENDING)
+  createdAt  DateTime @default(now())
+  
+  user       User     @relation("UserFriendships", fields: [userId], references: [id], onDelete: Cascade)
+  friend     User     @relation("FriendOfUser", fields: [friendId], references: [id], onDelete: Cascade)
+  
+  @@unique([userId, friendId])
+  @@map("friendships")
+}
+
+// Enums
+enum Gender {
+  MALE
+  FEMALE
+  NON_BINARY
+  PREFER_NOT_TO_SAY
+}
+
+enum Disease {
+  ULCERATIVE_COLITIS
+  CROHNS_DISEASE
+  GASTROPARESIS
+  RHEUMATOID_ARTHRITIS
+  CELIAC_DISEASE
+  MULTIPLE_SCLEROSIS
+  TYPE_1_DIABETES
+  LUPUS
+  HEART_DISEASE
+  ASTHMA
+  CELIAC_DISEASE
+  PSORIASIS
+  ENDOMETRIOSIS
+  FIBROMYALGIA
+  ANKYLOSING_SPONDYLITIS
+  HASHIMOTOS_THYROIDITIS
+  GRAVES_DISEASE
+  DERMATOMYOSITIS
+  SJOGRENS_SYNDROME
+  CHRONIC_FATIGUE_SYNDROME
+  EPILEPSY
+  TYPE_1_DIABETES
+  TYPE_2_DIABETES
+  ADDISONS_DISEASE
+  POLYCYSTIC_OVARY_SYNDROME
+  THYROID_DISEASE
+  ENDOMETRIOSIS
+  DYSMENORRHEA
+  ASTHMA
+  PSORIASIS
+  LONG_COVID
+  OTHER
+}
+
+enum Severity {
+  MILD
+  MODERATE
+  SEVERE
+  REMISSION
+}
+
+enum Discipline {
+  ROAD_CYCLING
+  CYCLOCROSS
+  MOUNTAIN_BIKE_XC
+  MOUNTAIN_BIKE_ST
+  MOUNTAIN_BIKE
+  GRAVEL_ENDURANCE
+  TRAIL_RUNNING
+  ULTRA_RUNNING
+  ROAD_RUNNING
+  MARATHON
+  TRIATHLON
+  SWIMMING
+  ROWING
+  OTHER
+  CROSS_COUNTRY_SKI
+  SKIMO
+  OBSTACLE_COURSE_RACING
+}
+
+enum CompetitiveLevel {
+  RECREATIONAL
+  CAT_5
+  CAT_4
+  CAT_3
+  CAT_2
+  CAT_1
+  PRO
+}
+
+enum SubscriptionStatus {
+  TRIAL
+  ACTIVE
+  PAST_DUE
+  CANCELLED
+  EXPIRED
+}
+
+enum PostType {
+  DISCUSSION
+  ADVICE_REQUEST
+  HEALTH_QUESTION
+  PROVIDER_RECOMMENDATION
+  TRAINING_RECOMMENDATION
+  RECOVERY_UPDATE
+  RACE_REPORT
+  RESOURCE_SHARE
+  DIAGNOSIS_STORY
+  SUPPLEMENT_STACK
+  DIET_EXPERIMENT
+  WINS_AND_BREAKTHROUGHS
+  JOURNAL_ENTRY
+  COMMUNITY_POLL
+  RESEARCH_DISCUSSION
+  
+}
+
+enum VoteType {
+  UP
+  DOWN
+}
+
+enum FriendshipStatus {
+  PENDING
+  ACCEPTED
+  BLOCKED
+}
