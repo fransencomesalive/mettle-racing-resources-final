@@ -38,3 +38,5 @@ Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/bui
 test deployment 2:31pm
 
 Force deployment - aa4f5c2
+
+test autodeploy 3:11 
